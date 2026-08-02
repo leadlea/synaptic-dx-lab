@@ -1,0 +1,6 @@
+#!/bin/bash
+# Synaptic DX / Role Control Harness -- CLI エントリポイント
+# どのディレクトリから叩いてもプロジェクトルート基準で動く。
+set -uo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec python3 "$HERE/harness.py" "$@"

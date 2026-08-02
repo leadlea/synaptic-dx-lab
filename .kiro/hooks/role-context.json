@@ -1,0 +1,21 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Harness Role Context",
+      "trigger": "UserPromptSubmit",
+      "action": {
+        "type": "command",
+        "command": "bash harness/hx status --hook"
+      }
+    },
+    {
+      "name": "Harness Role Context (session start)",
+      "trigger": "SessionStart",
+      "action": {
+        "type": "command",
+        "command": "bash harness/hx status --hook"
+      }
+    }
+  ]
+}

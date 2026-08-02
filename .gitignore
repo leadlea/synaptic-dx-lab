@@ -1,0 +1,13 @@
+# 生成物（setup で再生成される。コミットしない）
+vault/
+keys/
+data/
+workspace/
+audit/
+.harness/
+
+# OS
+.DS_Store
+
+# 特定顧客向けの提案資料（公開対象外）
+docs/

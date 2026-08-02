@@ -1,0 +1,14 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Harness Role Guard",
+      "trigger": "PreToolUse",
+      "matcher": "read_file|read_files|readFile|read_code|grep_search|execute_bash|fs_write|str_replace|fs_append",
+      "action": {
+        "type": "command",
+        "command": "bash harness/guard.sh"
+      }
+    }
+  ]
+}

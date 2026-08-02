@@ -1,0 +1,67 @@
+{
+  "version": "1.0",
+  "policy_set": "hr-payroll@v14",
+  "roles": {
+    "admin": {
+      "label": "管理者（人事・役員）",
+      "principal": "role/hr-director",
+      "actor": "hr-director@example.co.jp",
+      "env": "local-managed-device",
+      "note": "給与改定・要員配置の最終決裁。実名と実額の両方が必要。",
+      "layers": ["L0", "L1", "L2"]
+    },
+    "analyst": {
+      "label": "業務担当者（ダッシュボード可視化）",
+      "principal": "role/analyst-dashboard",
+      "actor": "analyst@example.co.jp",
+      "env": "local-standard-device",
+      "note": "人件費傾向分析と要員計画。個人特定は不要。",
+      "layers": ["L1", "L2"]
+    },
+    "agent": {
+      "label": "AIエージェント（シナプス接続）",
+      "principal": "role/agent-workforce-planner",
+      "actor": "agent://synapse/workforce-planner",
+      "env": "cloud-runtime",
+      "note": "ダイナミックオントロジーで他部門データと接続。集約値のみで判断。",
+      "layers": ["L2"]
+    }
+  },
+  "layers": {
+    "L0": {
+      "label": "L0 実名 + 実額",
+      "store": "vault/payroll_L0.enc",
+      "view": "workspace/L0",
+      "key": "keys/L0.key",
+      "mode_grant": "0400",
+      "encrypted": true,
+      "cloud_sync": false,
+      "deny_mech": "MOUNT+KEY BOUNDARY"
+    },
+    "L1": {
+      "label": "L1 個人情報マスク",
+      "store": "data/L1/payroll_masked.csv",
+      "view": "workspace/L1",
+      "key": null,
+      "mode_grant": "0400",
+      "encrypted": false,
+      "cloud_sync": false,
+      "deny_mech": "MOUNT BOUNDARY"
+    },
+    "L2": {
+      "label": "L2 AI-Ready 構造化",
+      "store": "data/L2/payroll_semantic.jsonld",
+      "view": "workspace/L2",
+      "key": null,
+      "mode_grant": "0444",
+      "encrypted": false,
+      "cloud_sync": true,
+      "deny_mech": "OPEN"
+    }
+  },
+  "cloud_synced_layers": ["L2"],
+  "escalation_guard": {
+    "note": "エージェント側からの自己昇格を遮断する対象トークン",
+    "tokens": ["chflags", "nouappnd", "harness.py role", "hx role", "hx setup", "harness.py setup"]
+  }
+}
