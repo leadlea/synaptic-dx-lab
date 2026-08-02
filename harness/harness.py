@@ -622,7 +622,8 @@ def cmd_read(argv):
     nlines = len([x for x in body.splitlines() if x.strip()])
     step(4, 'ok', '%d lines' % nlines)
 
-    rec = audit_append(role, R['principal'], 'READ', lk, 'ALLOW', 'GRANTED', '%d lines' % nlines)
+    rec = audit_append(role, R['principal'], 'READ', lk, 'ALLOW', 'GRANTED',
+                       'actor=%s lines=%d' % (R.get('actor', '-'), nlines))
     step(5, 'ok', 'seq=%d hash=%s' % (rec['seq'], rec['hash']))
 
     print('')
@@ -844,6 +845,65 @@ def cmd_audit(argv):
 # =====================================================================
 # guard : Kiro PreToolUse フックの実体。exit 2 でツール実行をブロックする
 # =====================================================================
+def payload_tool_name(payload):
+    """フックが stdin で受けた JSON からツール名を拾う。取れなければ '-'。"""
+    try:
+        d = json.loads(payload)
+    except Exception:
+        return '-'
+    if not isinstance(d, dict):
+        return '-'
+    for k in ('tool_name', 'toolName', 'tool', 'name'):
+        v = d.get(k)
+        if isinstance(v, str) and v.strip():
+            return v.strip()[:40]
+    return '-'
+
+def store_extent(L):
+    """許可レイヤーの実ストアの規模。平文は行数、暗号済みは byte 数を返す。"""
+    path = p(L['store'])
+    try:
+        if L.get('encrypted'):
+            return 'bytes=%d' % os.stat(path).st_size
+        with open(path, 'r') as f:
+            return 'lines=%d' % sum(1 for ln in f if ln.strip())
+    except OSError as e:
+        return 'unreadable=errno%d' % (e.errno or 0)
+
+def _already_logged(role, layer, tool, ts):
+    """同一秒・同一ツール・同一レイヤーの重複記録を1件に抑える。"""
+    lines = chain_lines()
+    if not lines:
+        return False
+    try:
+        last = json.loads(lines[-1])
+    except Exception:
+        return False
+    return (last.get('ts') == ts and last.get('role') == role
+            and last.get('layer') == layer and last.get('action') == 'TOOL_USE'
+            and last.get('decision') == 'ALLOW' and ('tool=' + tool) in last.get('detail', ''))
+
+def audit_allowed_tool_use(payload, low, policy, role, R):
+    """許可レイヤーへのツール参照を ALLOW として記録する。
+    PreToolUse なので「許可された参照要求」の記録であり、読み取り完了の証明ではない。
+    記録に失敗してもツール実行は妨げない。"""
+    try:
+        tool = payload_tool_name(payload)
+        for lk in R['layers']:
+            L = policy['layers'][lk]
+            toks = [L['store'], L['view'], os.path.basename(L['store'])]
+            if not any(t and t.lower() in low for t in toks):
+                continue
+            ts = datetime.datetime.now().isoformat(timespec='seconds')
+            if _already_logged(role, lk, tool, ts):
+                continue
+            audit_append(role, R['principal'], 'TOOL_USE', lk, 'ALLOW', 'GRANTED',
+                         'permitted by PreToolUse hook tool=%s actor=%s %s' % (
+                             tool, R.get('actor', '-'), store_extent(L)))
+    except Exception:
+        pass
+
+
 def cmd_guard(argv):
     try:
         payload = sys.stdin.read()
@@ -876,6 +936,9 @@ def cmd_guard(argv):
             esc.append(t)
 
     if not hits and not esc:
+        # 遮断されなかった場合も、許可レイヤーへの参照であれば記録する。
+        # 「誰が・いつ・何行」を残すのが目的なので、ALLOW も同じチェーンに積む。
+        audit_allowed_tool_use(payload, low, policy, role, R)
         return 0
 
     lines = []
@@ -897,7 +960,8 @@ def cmd_guard(argv):
     layer = hits[0][0] if hits else None
     mech = hits[0][2] if hits else 'ESCALATION GUARD'
     audit_append(role, R['principal'], 'TOOL_USE', layer, 'DENY', mech,
-                 'blocked by PreToolUse hook')
+                 'blocked by PreToolUse hook tool=%s actor=%s' % (
+                     payload_tool_name(payload), R.get('actor', '-')))
     return 2
 
 

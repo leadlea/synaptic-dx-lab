@@ -97,6 +97,33 @@ ALLOW と DENY を同じチェーンに記録するため、「読めなかっ�
 VALID    15 entries verified  (hv3=1 full-256 / hv2=4 detail保護 / hv1=10 旧形式)
 ```
 
+### エージェントのツール参照の記録
+
+PreToolUse フックは遮断専用ではない。**許可レイヤーへの参照も ALLOW として同じチェーンに記録する**。
+「誰が・いつ・何が・何行」を1行で残すため、`detail` に次を入れる。
+
+```
+seq=21  TOOL_USE  L2  ALLOW  GRANTED
+        permitted by PreToolUse hook tool=read_file actor=agent://synapse/workforce-planner lines=90
+```
+
+| 項目 | 出どころ |
+|---|---|
+| 誰が | `role` / `principal`（ポリシー）＋ `detail` の `actor=`（`harness/policy.json` の `actor`） |
+| いつ | `ts`（秒精度） |
+| 何を | `layer` ＋ `detail` の `tool=`（フックが受け取ったツール名） |
+| 何行 | `detail` の `lines=`。暗号化レイヤーは行数が意味を持たないため `bytes=` になる |
+
+`hx read` 経由の参照も同じ形式で `actor=... lines=...` を記録する。
+
+動作の範囲を正確に書くと次のとおり。
+
+- **PreToolUse なので「許可された参照要求」の記録**であり、読み取りが完了したことの証明ではない
+- 判定はツール入力の文字列照合。したがってレイヤーのパスに言及しただけの書き込み操作も記録される（保守的側に倒している）
+- 同一秒・同一ツール・同一レイヤーの重複は1件に抑える
+- レイヤーに触れないツール実行は記録しない（台帳が埋まらないようにするため）
+- 記録処理が失敗してもツール実行は妨げない
+
 ### 外部アンカー（封印）
 
 ハッシュチェーンは**末尾レコードの削除**を単独では検出できない。`hx audit anchor` はその時点の
